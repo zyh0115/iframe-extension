@@ -1,0 +1,468 @@
+<p>/** @type {HTMLIFrameElement|null} */<br />
+let iframe = null; // 定義 iframe 變數，初始為 null<br />
+let overlay = null; // 定義 overlay 變數，初始為 null</p>
+
+<p>// 功能政策設定，防止一些特定功能被啟用<br />
+const featurePolicy = {<br />
+&nbsp; accelerometer: &quot;&#39;none&#39;&quot;, // 加速度計<br />
+&nbsp; &quot;ambient-light-sensor&quot;: &quot;&#39;none&#39;&quot;, // 環境光感測器<br />
+&nbsp; battery: &quot;&#39;none&#39;&quot;, // 電池<br />
+&nbsp; camera: &quot;&#39;none&#39;&quot;, // 相機<br />
+&nbsp; &quot;display-capture&quot;: &quot;&#39;none&#39;&quot;, // 顯示擷取<br />
+&nbsp; &quot;document-domain&quot;: &quot;&#39;none&#39;&quot;, // 文件域<br />
+&nbsp; &quot;encrypted-media&quot;: &quot;&#39;none&#39;&quot;, // 加密媒體<br />
+&nbsp; fullscreen: &quot;&#39;none&#39;&quot;, // 全屏<br />
+&nbsp; geolocation: &quot;&#39;none&#39;&quot;, // 地理位置<br />
+&nbsp; gyroscope: &quot;&#39;none&#39;&quot;, // 陀螺儀<br />
+&nbsp; magnetometer: &quot;&#39;none&#39;&quot;, // 磁力計<br />
+&nbsp; microphone: &quot;&#39;none&#39;&quot;, // 麥克風<br />
+&nbsp; midi: &quot;&#39;none&#39;&quot;, // MIDI<br />
+&nbsp; payment: &quot;&#39;none&#39;&quot;, // 支付<br />
+&nbsp; &quot;picture-in-picture&quot;: &quot;&#39;none&#39;&quot;, // 畫中畫<br />
+&nbsp; &quot;publickey-credentials-get&quot;: &quot;&#39;none&#39;&quot;, // 公鑰憑證<br />
+&nbsp; &quot;speaker-selection&quot;: &quot;&#39;none&#39;&quot;, // 喇叭選擇<br />
+&nbsp; usb: &quot;&#39;none&#39;&quot;, // USB<br />
+&nbsp; vibrate: &quot;&#39;none&#39;&quot;, // 震動<br />
+&nbsp; vr: &quot;&#39;none&#39;&quot;, // 虛擬實境<br />
+&nbsp; &quot;screen-wake-lock&quot;: &quot;&#39;none&#39;&quot;, // 螢幕喚醒鎖定<br />
+&nbsp; &quot;web-share&quot;: &quot;&#39;none&#39;&quot;, // 網路分享<br />
+&nbsp; &quot;interest-cohort&quot;: &quot;&#39;none&#39;&quot;, // 興趣群體<br />
+};</p>
+
+<p>// 定義沙盒屬性，限制 iframe 行為<br />
+const SANDBOX = [<br />
+&nbsp; &quot;allow-same-origin&quot;, // 允許同源<br />
+&nbsp; &quot;allow-scripts&quot;, // 允許腳本<br />
+&nbsp; &quot;allow-forms&quot;, // 允許表單<br />
+&nbsp; &quot;allow-modals&quot;, // 允許模態框<br />
+&nbsp; &quot;allow-popups&quot;, // 允許彈出視窗</p>
+
+<p>&nbsp; // 我們不想包含的主要屬性是 allow-top-navigation<br />
+&nbsp; // The big one we don&#39;t want to include is allow-top-navigation<br />
+];</p>
+
+<p>let x = 0; // 設定 x 座標初始值<br />
+let y = 0; // 設定 y 座標初始值<br />
+let width = -1; // 寬度，負值表示預設值<br />
+let height = -1; // 高度，負值表示預設值<br />
+let interactive = true; // 是否允許互動<br />
+let resizeBehavior = &quot;scale&quot;; // 調整大小行為</p>
+
+<p>// 更新 iframe 屬性<br />
+const updateFrameAttributes = () =&gt; {<br />
+&nbsp; if (!iframe) {<br />
+&nbsp; &nbsp; return; // 如果 iframe 不存在，直接返回<br />
+&nbsp; }</p>
+
+<p>&nbsp; iframe.style.pointerEvents = interactive ? &quot;auto&quot; : &quot;none&quot;; // 設定互動性</p>
+
+<p>&nbsp; const { stageWidth, stageHeight } = Scratch.vm.runtime; // 獲取舞台寬高<br />
+&nbsp; const effectiveWidth = width &gt;= 0 ? width : stageWidth; // 計算有效寬度<br />
+&nbsp; const effectiveHeight = height &gt;= 0 ? height : stageHeight; // 計算有效高度</p>
+
+<p>&nbsp; if (resizeBehavior === &quot;scale&quot;) {<br />
+&nbsp; &nbsp; iframe.style.width = `${effectiveWidth}px`;<br />
+&nbsp; &nbsp; iframe.style.height = `${effectiveHeight}px`;</p>
+
+<p>&nbsp; &nbsp; iframe.style.transform = `translate(${-effectiveWidth / 2 + x}px, ${<br />
+&nbsp; &nbsp; &nbsp; -effectiveHeight / 2 - y<br />
+&nbsp; &nbsp; }px)`;<br />
+&nbsp; &nbsp; iframe.style.top = &quot;0&quot;;<br />
+&nbsp; &nbsp; iframe.style.left = &quot;0&quot;;<br />
+&nbsp; } else {<br />
+&nbsp; &nbsp; iframe.style.width = `${(effectiveWidth / stageWidth) * 100}%`;<br />
+&nbsp; &nbsp; iframe.style.height = `${(effectiveHeight / stageHeight) * 100}%`;</p>
+
+<p>&nbsp; &nbsp; iframe.style.transform = &quot;&quot;;<br />
+&nbsp; &nbsp; iframe.style.top = `${<br />
+&nbsp; &nbsp; &nbsp; (0.5 - effectiveHeight / 2 / stageHeight - y / stageHeight) * 100<br />
+&nbsp; &nbsp; }%`;<br />
+&nbsp; &nbsp; iframe.style.left = `${<br />
+&nbsp; &nbsp; &nbsp; (0.5 - effectiveWidth / 2 / stageWidth + x / stageWidth) * 100<br />
+&nbsp; &nbsp; }%`;<br />
+&nbsp; }<br />
+};</p>
+
+<p>// 獲取覆蓋模式<br />
+const getOverlayMode = () =&gt;<br />
+&nbsp; resizeBehavior === &quot;scale&quot; ? &quot;scale-centered&quot; : &quot;manual&quot;;</p>
+
+<p>// 創建 iframe<br />
+const createFrame = (src) =&gt; {<br />
+&nbsp; iframe = document.createElement(&quot;iframe&quot;);<br />
+&nbsp; iframe.style.width = &quot;100%&quot;;<br />
+&nbsp; iframe.style.height = &quot;100%&quot;;<br />
+&nbsp; iframe.style.border = &quot;none&quot;;<br />
+&nbsp; iframe.style.position = &quot;absolute&quot;;<br />
+&nbsp; iframe.setAttribute(&quot;sandbox&quot;, SANDBOX.join(&quot; &quot;));<br />
+&nbsp; iframe.setAttribute(<br />
+&nbsp; &nbsp; &quot;allow&quot;,<br />
+&nbsp; &nbsp; Object.entries(featurePolicy)<br />
+&nbsp; &nbsp; &nbsp; .map(([name, permission]) =&gt; `${name} ${permission}`)<br />
+&nbsp; &nbsp; &nbsp; .join(&quot;; &quot;)<br />
+&nbsp; );<br />
+&nbsp; iframe.setAttribute(&quot;allowtransparency&quot;, &quot;true&quot;);<br />
+&nbsp; iframe.setAttribute(&quot;allowtransparency&quot;, &quot;true&quot;);<br />
+&nbsp; iframe.setAttribute(&quot;src&quot;, src);</p>
+
+<p>&nbsp; overlay = Scratch.renderer.addOverlay(iframe, getOverlayMode());<br />
+&nbsp; updateFrameAttributes();<br />
+};<br />
+// 關閉 iframe<br />
+const closeFrame = () =&gt; {<br />
+&nbsp; if (iframe) {<br />
+&nbsp; &nbsp; Scratch.renderer.removeOverlay(iframe);<br />
+&nbsp; &nbsp; iframe = null;<br />
+&nbsp; &nbsp; overlay = null;<br />
+&nbsp; }<br />
+};</p>
+
+<p>Scratch.vm.on(&quot;STAGE_SIZE_CHANGED&quot;, updateFrameAttributes);</p>
+
+<p>Scratch.vm.runtime.on(&quot;RUNTIME_DISPOSED&quot;, closeFrame);</p>
+
+<p>// 模擬滑鼠事件<br />
+const simulateMouseEvent = (type, x, y) =&gt; {<br />
+&nbsp; if (!iframe) return;<br />
+&nbsp; const event = new MouseEvent(type, {<br />
+&nbsp; &nbsp; bubbles: true,<br />
+&nbsp; &nbsp; cancelable: true,<br />
+&nbsp; &nbsp; clientX: x,<br />
+&nbsp; &nbsp; clientY: y,<br />
+&nbsp; &nbsp; view: iframe.contentWindow,<br />
+&nbsp; });<br />
+&nbsp; iframe.contentWindow.dispatchEvent(event);<br />
+};</p>
+
+<p>// 模擬鍵盤事件<br />
+const simulateKeyboardEvent = (type, key) =&gt; {<br />
+&nbsp; if (!iframe) return;<br />
+&nbsp; const event = new KeyboardEvent(type, {<br />
+&nbsp; &nbsp; bubbles: true,<br />
+&nbsp; &nbsp; cancelable: true,<br />
+&nbsp; &nbsp; key: key,<br />
+&nbsp; });<br />
+&nbsp; iframe.contentWindow.dispatchEvent(event);<br />
+};<br />
+// Iframe 擴展類<br />
+class IframeExtension {<br />
+&nbsp; getInfo() {<br />
+&nbsp; &nbsp; return {<br />
+&nbsp; &nbsp; &nbsp; name: Scratch.translate(&quot;Iframe&quot;),<br />
+&nbsp; &nbsp; &nbsp; id: &quot;iframe&quot;,<br />
+&nbsp; &nbsp; &nbsp; blocks: [<br />
+&nbsp; &nbsp; &nbsp; &nbsp; {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; opcode: &quot;display&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; blockType: Scratch.BlockType.COMMAND,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; text: Scratch.translate(&quot;show website [URL]&quot;),<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; arguments: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; URL: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; type: Scratch.ArgumentType.STRING,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; defaultValue: &quot;https://extensions.turbowarp.org/hello.html&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; opcode: &quot;displayHTML&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; blockType: Scratch.BlockType.COMMAND,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; text: Scratch.translate(&quot;show HTML [HTML]&quot;),<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; arguments: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; HTML: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; type: Scratch.ArgumentType.STRING,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; defaultValue: `&lt;h1&gt;${Scratch.translate(&quot;It works!&quot;)}&lt;/h1&gt;`,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &quot;---&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; opcode: &quot;show&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; blockType: Scratch.BlockType.COMMAND,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; text: Scratch.translate(&quot;show iframe&quot;),<br />
+&nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; opcode: &quot;hide&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; blockType: Scratch.BlockType.COMMAND,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; text: Scratch.translate(&quot;hide iframe&quot;),<br />
+&nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; opcode: &quot;close&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; blockType: Scratch.BlockType.COMMAND,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; text: Scratch.translate(&quot;close iframe&quot;),<br />
+&nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &quot;---&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; opcode: &quot;get&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; blockType: Scratch.BlockType.REPORTER,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; text: Scratch.translate(&quot;iframe [MENU]&quot;),<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; arguments: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; MENU: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; type: Scratch.ArgumentType.STRING,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; menu: &quot;getMenu&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; opcode: &quot;setX&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; blockType: Scratch.BlockType.COMMAND,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; text: Scratch.translate(&quot;set iframe x position to [X]&quot;),<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; arguments: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; X: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; type: Scratch.ArgumentType.NUMBER,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; defaultValue: &quot;0&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; opcode: &quot;setY&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; blockType: Scratch.BlockType.COMMAND,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; text: Scratch.translate(&quot;set iframe y position to [Y]&quot;),<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; arguments: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Y: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; type: Scratch.ArgumentType.NUMBER,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; defaultValue: &quot;0&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; opcode: &quot;setWidth&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; blockType: Scratch.BlockType.COMMAND,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; text: Scratch.translate(&quot;set iframe width to [WIDTH]&quot;),<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; arguments: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; WIDTH: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; type: Scratch.ArgumentType.NUMBER,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; defaultValue: Scratch.vm.runtime.stageWidth,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; opcode: &quot;setHeight&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; blockType: Scratch.BlockType.COMMAND,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; text: Scratch.translate(&quot;set iframe height to [HEIGHT]&quot;),<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; arguments: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; HEIGHT: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; type: Scratch.ArgumentType.NUMBER,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; defaultValue: Scratch.vm.runtime.stageHeight,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; opcode: &quot;setInteractive&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; blockType: Scratch.BlockType.COMMAND,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; text: Scratch.translate(&quot;set iframe interactive to [INTERACTIVE]&quot;),<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; arguments: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; INTERACTIVE: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; type: Scratch.ArgumentType.STRING,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; menu: &quot;interactiveMenu&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; opcode: &quot;setResize&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; blockType: Scratch.BlockType.COMMAND,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; text: Scratch.translate(&quot;set iframe resize behavior to [RESIZE]&quot;),<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; arguments: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; RESIZE: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; type: Scratch.ArgumentType.STRING,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; menu: &quot;resizeMenu&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; opcode: &quot;simulateMouse&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; blockType: Scratch.BlockType.COMMAND,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; text: Scratch.translate(&quot;simulate mouse [EVENT] at x: [X] y: [Y]&quot;),<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; arguments: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; EVENT: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; type: Scratch.ArgumentType.STRING,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; menu: &quot;mouseEventMenu&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; X: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; type: Scratch.ArgumentType.NUMBER,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; defaultValue: 0,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Y: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; type: Scratch.ArgumentType.NUMBER,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; defaultValue: 0,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; opcode: &quot;simulateKey&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; blockType: Scratch.BlockType.COMMAND,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; text: Scratch.translate(&quot;simulate key [EVENT] [KEY]&quot;),<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; arguments: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; EVENT: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; type: Scratch.ArgumentType.STRING,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; menu: &quot;keyEventMenu&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; KEY: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; type: Scratch.ArgumentType.STRING,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; defaultValue: &quot;a&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; ],<br />
+&nbsp; &nbsp; &nbsp; menus: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; getMenu: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; acceptReporters: true,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; items: [<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Scratch.translate(&quot;url&quot;),<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Scratch.translate(&quot;visible&quot;),<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &quot;x&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &quot;y&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Scratch.translate(&quot;width&quot;),<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Scratch.translate(&quot;height&quot;),<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Scratch.translate(&quot;interactive&quot;),<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Scratch.translate(&quot;resize behavior&quot;),<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ],<br />
+&nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; interactiveMenu: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; acceptReporters: true,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; items: [<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &quot;true&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &quot;false&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ],<br />
+&nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; resizeMenu: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; acceptReporters: true,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; items: [<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; text: Scratch.translate(&quot;scale&quot;),<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; value: &quot;scale&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; text: Scratch.translate(&quot;viewport&quot;),<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; value: &quot;viewport&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ],<br />
+&nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; mouseEventMenu: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; acceptReporters: true,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; items: [<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &quot;click&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &quot;mousedown&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &quot;mouseup&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &quot;mousemove&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ],<br />
+&nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; &nbsp; keyEventMenu: {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; acceptReporters: true,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; items: [<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &quot;keydown&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &quot;keyup&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &quot;keypress&quot;,<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ],<br />
+&nbsp; &nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; &nbsp; },<br />
+&nbsp; &nbsp; };<br />
+&nbsp; }</p>
+
+<p>&nbsp; display({ URL }) {<br />
+&nbsp; &nbsp; closeFrame();<br />
+&nbsp; &nbsp; if (Scratch.canEmbed(URL)) {<br />
+&nbsp; &nbsp; &nbsp; createFrame(Scratch.Cast.toString(URL));<br />
+&nbsp; &nbsp; }<br />
+&nbsp; }</p>
+
+<p>&nbsp; displayHTML({ HTML }) {<br />
+&nbsp; &nbsp; closeFrame();<br />
+&nbsp; &nbsp; const url = `data:text/html;,${encodeURIComponent(<br />
+&nbsp; &nbsp; &nbsp; Scratch.Cast.toString(HTML)<br />
+&nbsp; &nbsp; )}`;<br />
+&nbsp; &nbsp; if (Scratch.canEmbed(url)) {<br />
+&nbsp; &nbsp; &nbsp; createFrame(url);<br />
+&nbsp; &nbsp; }<br />
+&nbsp; }</p>
+
+<p>&nbsp; show() {<br />
+&nbsp; &nbsp; if (iframe) {<br />
+&nbsp; &nbsp; &nbsp; iframe.style.display = &quot;&quot;;<br />
+&nbsp; &nbsp; }<br />
+&nbsp; }</p>
+
+<p>&nbsp; hide() {<br />
+&nbsp; &nbsp; if (iframe) {<br />
+&nbsp; &nbsp; &nbsp; iframe.style.display = &quot;none&quot;;<br />
+&nbsp; &nbsp; }<br />
+&nbsp; }</p>
+
+<p>&nbsp; close() {<br />
+&nbsp; &nbsp; closeFrame();<br />
+&nbsp; }</p>
+
+<p>&nbsp; get({ MENU }) {<br />
+&nbsp; &nbsp; MENU = Scratch.Cast.toString(MENU);<br />
+&nbsp; &nbsp; if (MENU === &quot;url&quot;) {<br />
+&nbsp; &nbsp; &nbsp; if (iframe) return iframe.getAttribute(&quot;src&quot;);<br />
+&nbsp; &nbsp; &nbsp; return &quot;&quot;;<br />
+&nbsp; &nbsp; } else if (MENU === &quot;visible&quot;) {<br />
+&nbsp; &nbsp; &nbsp; return !!iframe &amp;&amp; iframe.style.display !== &quot;none&quot;;<br />
+&nbsp; &nbsp; } else if (MENU === &quot;x&quot;) {<br />
+&nbsp; &nbsp; &nbsp; return x;<br />
+&nbsp; &nbsp; } else if (MENU === &quot;y&quot;) {<br />
+&nbsp; &nbsp; &nbsp; return y;<br />
+&nbsp; &nbsp; } else if (MENU === &quot;width&quot;) {<br />
+&nbsp; &nbsp; &nbsp; return width &gt;= 0 ? width : Scratch.vm.runtime.stageWidth;<br />
+&nbsp; &nbsp; } else if (MENU === &quot;height&quot;) {<br />
+&nbsp; &nbsp; &nbsp; return height &gt;= 0 ? height : Scratch.vm.runtime.stageHeight;<br />
+&nbsp; &nbsp; } else if (MENU === &quot;interactive&quot;) {<br />
+&nbsp; &nbsp; &nbsp; return interactive;<br />
+&nbsp; &nbsp; } else if (MENU === &quot;resize behavior&quot;) {<br />
+&nbsp; &nbsp; &nbsp; return resizeBehavior;<br />
+&nbsp; &nbsp; } else {<br />
+&nbsp; &nbsp; &nbsp; return &quot;&quot;;<br />
+&nbsp; &nbsp; }<br />
+&nbsp; }</p>
+
+<p>&nbsp; setX({ X }) {<br />
+&nbsp; &nbsp; x = Scratch.Cast.toNumber(X);<br />
+&nbsp; &nbsp; updateFrameAttributes();<br />
+&nbsp; }</p>
+
+<p>&nbsp; setY({ Y }) {<br />
+&nbsp; &nbsp; y = Scratch.Cast.toNumber(Y);<br />
+&nbsp; &nbsp; updateFrameAttributes();<br />
+&nbsp; }</p>
+
+<p>&nbsp; setWidth({ WIDTH }) {<br />
+&nbsp; &nbsp; width = Scratch.Cast.toNumber(WIDTH);<br />
+&nbsp; &nbsp; updateFrameAttributes();<br />
+&nbsp; }</p>
+
+<p>&nbsp; setHeight({ HEIGHT }) {<br />
+&nbsp; &nbsp; height = Scratch.Cast.toNumber(HEIGHT);<br />
+&nbsp; &nbsp; updateFrameAttributes();<br />
+&nbsp; }</p>
+
+<p>&nbsp; setInteractive({ INTERACTIVE }) {<br />
+&nbsp; &nbsp; interactive = Scratch.Cast.toBoolean(INTERACTIVE);<br />
+&nbsp; &nbsp; updateFrameAttributes();<br />
+&nbsp; }</p>
+
+<p>&nbsp; setResize({ RESIZE }) {<br />
+&nbsp; &nbsp; if (RESIZE === &quot;scale&quot; || RESIZE === &quot;viewport&quot;) {<br />
+&nbsp; &nbsp; &nbsp; resizeBehavior = RESIZE;<br />
+&nbsp; &nbsp; &nbsp; if (overlay) {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; overlay.mode = getOverlayMode();<br />
+&nbsp; &nbsp; &nbsp; &nbsp; Scratch.renderer._updateOverlays();<br />
+&nbsp; &nbsp; &nbsp; &nbsp; updateFrameAttributes();<br />
+&nbsp; &nbsp; &nbsp; }<br />
+&nbsp; &nbsp; }<br />
+&nbsp; }</p>
+
+<p>&nbsp; simulateMouse({ EVENT, X, Y }) {<br />
+&nbsp; &nbsp; const type = Scratch.Cast.toString(EVENT);<br />
+&nbsp; &nbsp; const x = Scratch.Cast.toNumber(X);<br />
+&nbsp; &nbsp; const y = Scratch.Cast.toNumber(Y);<br />
+&nbsp; &nbsp; simulateMouseEvent(type, x, y);<br />
+&nbsp; }</p>
+
+<p>&nbsp; simulateKey({ EVENT, KEY }) {<br />
+&nbsp; &nbsp; const type = Scratch.Cast.toString(EVENT);<br />
+&nbsp; &nbsp; const key = Scratch.Cast.toString(KEY);<br />
+&nbsp; &nbsp; simulateKeyboardEvent(type, key);<br />
+&nbsp; }<br />
+}</p>
+
+<p>Scratch.extensions.register(new IframeExtension());<br />
+&nbsp;</p>
