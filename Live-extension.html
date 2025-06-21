@@ -1,0 +1,92 @@
+(function(Scratch) {
+  "use strict";
+
+  let localStream;
+  let peer;
+  let socket;
+  let video = document.createElement("video");
+  video.autoplay = true;
+  video.muted = true;
+  video.style.position = "absolute";
+  video.style.top = "10px";
+  video.style.left = "10px";
+  video.style.width = "160px";
+  video.style.height = "120px";
+  video.style.zIndex = 9999;
+  document.body.appendChild(video);
+
+  class VideoCall {
+    getInfo() {
+      return {
+        id: "videocall",
+        name: "視訊通話",
+        color1: "#66ccff",
+        blocks: [
+          {
+            opcode: "connect",
+            blockType: Scratch.BlockType.COMMAND,
+            text: "加入房間代碼 [ROOM]",
+            arguments: {
+              ROOM: { type: Scratch.ArgumentType.STRING, defaultValue: "room123" }
+            }
+          }
+        ]
+      };
+    }
+
+    async connect(args) {
+      const roomId = args.ROOM;
+      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      video.srcObject = localStream;
+
+      socket = new WebSocket("ws://你的伺服器位址:8080");
+
+      peer = new RTCPeerConnection({
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+      });
+
+      localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
+
+      peer.ontrack = e => {
+        const remoteVideo = document.createElement("video");
+        remoteVideo.autoplay = true;
+        remoteVideo.srcObject = e.streams[0];
+        remoteVideo.style.position = "absolute";
+        remoteVideo.style.top = "140px";
+        remoteVideo.style.left = "10px";
+        remoteVideo.style.width = "160px";
+        remoteVideo.style.height = "120px";
+        remoteVideo.style.zIndex = 9999;
+        document.body.appendChild(remoteVideo);
+      };
+
+      peer.onicecandidate = e => {
+        if (e.candidate) {
+          socket.send(JSON.stringify({ room: roomId, data: { candidate: e.candidate } }));
+        }
+      };
+
+      socket.onmessage = async message => {
+        const msg = JSON.parse(message.data).data;
+        if (msg.offer) {
+          await peer.setRemoteDescription(new RTCSessionDescription(msg.offer));
+          const answer = await peer.createAnswer();
+          await peer.setLocalDescription(answer);
+          socket.send(JSON.stringify({ room: roomId, data: { answer } }));
+        } else if (msg.answer) {
+          await peer.setRemoteDescription(new RTCSessionDescription(msg.answer));
+        } else if (msg.candidate) {
+          await peer.addIceCandidate(new RTCIceCandidate(msg.candidate));
+        }
+      };
+
+      socket.onopen = async () => {
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+        socket.send(JSON.stringify({ room: roomId, data: { offer } }));
+      };
+    }
+  }
+
+  Scratch.extensions.register(new VideoCall());
+})(Scratch);
